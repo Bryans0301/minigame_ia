@@ -5,19 +5,17 @@ import time
 from screeninfo import get_monitors
 import tkinter as tk
 from tkinter import messagebox
-import pygame  # Importamos pygame para manejar música
+import pygame  
 
 # Inicializar Pygame y configurar la música
 pygame.mixer.init()  # Inicializa el mezclador de audio de Pygame
-pygame.mixer.music.load("living_on_video.mp3")  # Carga la música (asegúrate de tener el archivo de música en la misma carpeta)
+pygame.mixer.music.load("C:/Users/bryan/OneDrive - IPCHILE - Instituto Profesional de Chile/Escritorio/IA/living_on_video.mp3")  # Carga la música
 pygame.mixer.music.set_volume(0.5)  # Establece el volumen (de 0.0 a 1.0)
 pygame.mixer.music.play(loops=-1, start=0.0)  # Reproduce la música en bucle (-1 significa bucle infinito)
 
-
-# Obtén el tamaño de la pantalla principal
-monitor = get_monitors()[0]
-screen_width = monitor.width
-screen_height = monitor.height
+# Configuración de la resolución
+screen_width = 1920
+screen_height = 1080
 
 # Configuración del juego
 circle_radius = 30
@@ -28,7 +26,10 @@ circles = []
 num_circles = 4  # Número de círculos (4 para formar una palabra)
 
 # Palabras para el juego
-words = ["mama", "papa","pepe"]
+words = ["mama", "papa", "pepe"]
+
+# Guardamos una copia de las palabras originales
+original_words = words.copy()
 
 # Inicialización de MediaPipe
 mp_hands = mp.solutions.hands
@@ -48,7 +49,11 @@ def generate_circles_for_word(selected_word):
 # Inicialización de la cámara
 cap = cv2.VideoCapture(0)
 
-# Configura la ventana de OpenCV para pantalla completa
+# Configura la cámara para capturar en 1280x720
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+# Configura la ventana de OpenCV para pantalla completa o tamaño específico
 cv2.namedWindow("Mini Juego", cv2.WND_PROP_FULLSCREEN)
 cv2.setWindowProperty("Mini Juego", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
@@ -59,6 +64,29 @@ def show_final_score():
     root.withdraw()  # Oculta la ventana principal de tkinter
     messagebox.showinfo("Juego Terminado", f"Puntuación final: {score}\nPalabras correctas: {correct_words}\nPalabras incorrectas: {incorrect_words}")
     root.destroy()
+
+def show_words_screen():
+    """Mostrar las palabras originales del juego en pantalla negra con letras blancas al final."""
+    words_window = tk.Tk()
+    words_window.title("Palabras del Juego")
+    words_window.geometry(f"{screen_width}x{screen_height}")
+    words_window.config(bg='black')  # Fondo negro
+
+    # Etiqueta que muestra las palabras en el centro de la pantalla
+    words_label = tk.Label(words_window, text="Palabras del juego:", font=("Helvetica", 36, "bold"), fg="white", bg="black")
+    words_label.pack(pady=50)
+
+    # Mostrar las palabras en la pantalla
+    words_text = "\n".join(original_words)  # Unir todas las palabras con saltos de línea
+    words_display = tk.Label(words_window, text=words_text, font=("Helvetica", 24), fg="white", bg="black")
+    words_display.pack(pady=20)
+
+    # Botón para cerrar la ventana y salir del juego
+    close_button = tk.Button(words_window, text="Cerrar", font=("Helvetica", 20, "bold"), fg="white", bg="#39FF14", relief="raised", command=words_window.destroy)
+    close_button.pack(pady=50)
+
+    # Ejecutar la ventana para mostrar las palabras
+    words_window.mainloop()
 
 def show_welcome_screen():
     """Mostrar la pantalla de bienvenida y tutorial del juego."""
@@ -150,10 +178,10 @@ def main_game():
                             if letter in selected_word:
                                 score += 5  # Sumar 5 puntos por cada letra correcta
                                 touched_letters.append(letter)  # Añadir la letra tocada a la lista
-                                circles[i] = (0, 0, '')  # Eliminar la letra del círculo tocado
+                                circles[i] = (-150, -150, '')  # Eliminar la letra del círculo tocado
                             else:
                                 score -= 2  # Restar 2 puntos por cada letra incorrecta
-                                circles[i] = (0, 0, '')  # Eliminar la letra tocada
+                                circles[i] = (-150, -150, '')  # Eliminar la letra tocada
                             break  # Sal de la búsqueda para evitar contar múltiples círculos
 
             # Verifica si todas las letras han sido tocadas
@@ -189,13 +217,13 @@ def main_game():
             else:
                 incorrect_words += 1
                 score -= 7  # Restar 7 puntos por cada palabra errónea
-                cv2.putText(frame, "Palabra erronea", (screen_width // 2 - 150, screen_height // 2), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                cv2.putText(frame, "Palabra erronea", (screen_width // 2 - 150, screen_height // 2 + 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                 cv2.imshow("Mini Juego", frame)
                 cv2.waitKey(1000)  # Espera un segundo para mostrar el mensaje
         else:
             incorrect_words += 1
             score -= 7  # Restar 7 puntos por cada palabra errónea
-            cv2.putText(frame, "Palabra erronea", (screen_width // 2 - 150, screen_height // 2), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(frame, "Palabra erronea", (screen_width // 2 - 150, screen_height // 2 - 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.imshow("Mini Juego", frame)
             cv2.waitKey(1000)  # Espera un segundo para mostrar el mensaje
 
@@ -205,6 +233,7 @@ def main_game():
 
     # Cuando no haya más palabras en la lista, termina el juego
     show_final_score()
+    show_words_screen()  # Mostrar las palabras después de terminar el juego
     cap.release()
     cv2.destroyAllWindows()
 
