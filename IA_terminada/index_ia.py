@@ -9,7 +9,7 @@ import pygame
 
 # Inicializar Pygame y configurar la música
 pygame.mixer.init()  # Inicializa el mezclador de audio de Pygame
-pygame.mixer.music.load("C:/Users/bryan/OneDrive - IPCHILE - Instituto Profesional de Chile/Escritorio/IA/living_on_video.mp3")  # Carga la música
+pygame.mixer.music.load("living_on_video.mp3")  # Carga la música
 pygame.mixer.music.set_volume(0.5)  # Establece el volumen (de 0.0 a 1.0)
 pygame.mixer.music.play(loops=-1, start=0.0)  # Reproduce la música en bucle (-1 significa bucle infinito)
 
