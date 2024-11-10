@@ -1,11 +1,10 @@
-import cv2
-import mediapipe as mp
-import random
 import time
-from screeninfo import get_monitors
+import random
+import cv2
+import pygame
 import tkinter as tk
 from tkinter import messagebox
-import pygame  
+import mediapipe as mp
 
 # Inicializar Pygame y configurar la música
 pygame.mixer.init()  # Inicializa el mezclador de audio de Pygame
@@ -25,8 +24,23 @@ incorrect_words = 0  # Contador de palabras incorrectas
 circles = [] 
 num_circles = 4  # Número de círculos (4 para formar una palabra)
 
-# Palabras para el juego
-words = ["mama", "papa", "pepe"]
+# Lista de palabras de ejemplo (agrega más palabras si es necesario)
+word_list = [
+    "gato", "casa", "flor", "luna", "mesa", "pino", "nuez", "zeta",
+    "vaca", "pato", "bote", "cubo", "rosa", "loro", "vaso", "tren"
+]
+
+# Función para generar 4 palabras aleatorias con exactamente 4 letras
+def generate_random_words(num_words=4, word_length=4):
+    # Filtrar palabras que tienen exactamente 'word_length' caracteres
+    valid_words = [word for word in word_list if len(word) == word_length]
+    
+    # Seleccionar 4 palabras aleatorias
+    selected_words = random.sample(valid_words, num_words)
+    return selected_words
+
+# Generar las palabras aleatorias al inicio del juego
+words = generate_random_words(num_words=4, word_length=4)
 
 # Guardamos una copia de las palabras originales
 original_words = words.copy()
@@ -129,7 +143,7 @@ def main_game():
     # Mientras haya palabras disponibles en la lista
     while words:
         start_time = time.time()  # Reiniciar el temporizador al comenzar con una nueva palabra
-        game_duration = 30  # Duración de 15 segundos por palabra
+        game_duration = 30  # Duración de 30 segundos por palabra
 
         # Seleccionar una palabra aleatoria
         selected_word = random.choice(words)
