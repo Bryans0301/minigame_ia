@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*- 
 import time
 import random
 import cv2
@@ -5,251 +6,290 @@ import pygame
 import tkinter as tk
 from tkinter import messagebox
 import mediapipe as mp
+from PIL import ImageFont, ImageDraw, Image
+import numpy as np
+import os
+import sys
 
-# Inicializar Pygame y configurar la música
-pygame.mixer.init()  # Inicializa el mezclador de audio de Pygame
-pygame.mixer.music.load("living_on_video.mp3")  # Carga la música
-pygame.mixer.music.set_volume(0.5)  # Establece el volumen (de 0.0 a 1.0)
-pygame.mixer.music.play(loops=-1, start=0.0)  # Reproduce la música en bucle (-1 significa bucle infinito)
+# Música de fondo
+pygame.mixer.init()
+pygame.mixer.music.load("C:/Users/bryan/OneDrive - IPCHILE - Instituto Profesional de Chile/Escritorio/IA/living_on_video.mp3")
+pygame.mixer.music.set_volume(0.5)
+pygame.mixer.music.play(loops=-1, start=0.0)
 
-# Configuración de la resolución
-screen_width = 1920
-screen_height = 1080
-
-# Configuración del juego
 circle_radius = 30
 score = 0
-correct_words = 0  # Contador de palabras correctas
-incorrect_words = 0  # Contador de palabras incorrectas
-circles = [] 
-num_circles = 4  # Número de círculos (4 para formar una palabra)
+correct_words = 0
+incorrect_words = 0
+circles = []
+player_name = ""
 
-# Lista de palabras de ejemplo (agrega más palabras si es necesario)
+frame_width = 1920
+frame_height = 1080
+
 word_list = [
     "gato", "casa", "flor", "luna", "mesa", "pino", "nuez", "zeta",
     "vaca", "pato", "bote", "cubo", "rosa", "loro", "vaso", "tren"
 ]
 
-# Función para generar 4 palabras aleatorias con exactamente 4 letras
-def generate_random_words(num_words=4, word_length=4):
-    # Filtrar palabras que tienen exactamente 'word_length' caracteres
-    valid_words = [word for word in word_list if len(word) == word_length]
-    
-    # Seleccionar 4 palabras aleatorias
-    selected_words = random.sample(valid_words, num_words)
-    return selected_words
+word_hints = {
+    "gato": "Animal doméstico que maúlla.",
+    "casa": "Lugar donde vives.",
+    "flor": "Planta colorida con pétalos.",
+    "luna": "Satélite natural de la Tierra.",
+    "mesa": "Mueble con patas para comer.",
+    "pino": "Árbol de hojas perennes.",
+    "nuez": "Fruto seco con cáscara dura.",
+    "zeta": "Última letra del abecedario.",
+    "vaca": "Animal que da leche.",
+    "pato": "Ave que nada y grazna.",
+    "bote": "Vehículo para viajar por agua.",
+    "cubo": "Figura con seis caras cuadradas.",
+    "rosa": "Flor con espinas.",
+    "loro": "Ave que puede imitar sonidos.",
+    "vaso": "Objeto donde se bebe líquido.",
+    "tren": "Vehículo que corre sobre rieles."
+}
 
-# Generar las palabras aleatorias al inicio del juego
-words = generate_random_words(num_words=4, word_length=4)
+extra_hints = {
+    "gato": "Tiene bigotes y le gusta cazar ratones.",
+    "casa": "Tiene puertas, ventanas y a veces jardín.",
+    "flor": "Se regala en San Valentín.",
+    "luna": "Sale de noche y cambia de forma.",
+    "mesa": "Se usa para comer o estudiar.",
+    "pino": "Muy común en Navidad.",
+    "nuez": "Está dentro de una cáscara dura y se come.",
+    "zeta": "Empieza la palabra 'zorro'.",
+    "vaca": "Muge y vive en el campo.",
+    "pato": "Hace cuac cuac y tiene pico.",
+    "bote": "Flota en el agua, pero no es un pez.",
+    "cubo": "Tiene 6 caras iguales.",
+    "rosa": "Flor con espinas y pétalos suaves.",
+    "loro": "Puede repetir lo que dices.",
+    "vaso": "Contiene líquido, pero no lo derrama.",
+    "tren": "Corre sobre rieles y lleva pasajeros."
+}
 
-# Guardamos una copia de las palabras originales
-original_words = words.copy()
+def draw_text_with_border(img, text, position, font_path="C:/Windows/Fonts/arial.ttf",
+                          font_size=32, text_color=(255,255,255), border_color=(0,0,0), border_thickness=2):
+    img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(img_pil)
+    font = ImageFont.truetype(font_path, font_size)
+    x, y = position
+    for dx in range(-border_thickness, border_thickness+1):
+        for dy in range(-border_thickness, border_thickness+1):
+            if dx != 0 or dy != 0:
+                draw.text((x+dx, y+dy), text, font=font, fill=border_color)
+    draw.text((x, y), text, font=font, fill=text_color)
+    return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
-# Inicialización de MediaPipe
+
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
 mp_drawing = mp.solutions.drawing_utils
 
-# Función para generar círculos con letras aleatorias de una palabra
 def generate_circles_for_word(selected_word):
     global circles
-    circles = []  # Resetear los círculos
-    letters = list(selected_word)  # Convertir la palabra en una lista de letras
-    for i in range(num_circles):
-        x = random.randint(circle_radius, screen_width - circle_radius)
-        y = random.randint(circle_radius, screen_height - circle_radius)
-        circles.append((x, y, letters[i]))  # Asignar letra a cada círculo
+    circles = []
+    for letter in selected_word:
+        x = random.randint(circle_radius, frame_width - circle_radius)
+        y = random.randint(circle_radius + 100, frame_height - circle_radius)
+        circles.append((x, y, letter))
 
-# Inicialización de la cámara
-cap = cv2.VideoCapture(0)
-
-# Configura la cámara para capturar en 1280x720
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
-# Configura la ventana de OpenCV para pantalla completa o tamaño específico
+cap = cv2.VideoCapture(1)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_height)
 cv2.namedWindow("Mini Juego", cv2.WND_PROP_FULLSCREEN)
 cv2.setWindowProperty("Mini Juego", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
-def show_final_score():
-    """Mostrar la puntuación final al usuario."""
-    global correct_words, incorrect_words, score
-    root = tk.Tk()
-    root.withdraw()  # Oculta la ventana principal de tkinter
-    messagebox.showinfo("Juego Terminado", f"Puntuación final: {score}\nPalabras correctas: {correct_words}\nPalabras incorrectas: {incorrect_words}")
-    root.destroy()
+def save_score(name, score):
+    with open("score.txt", "a", encoding="utf-8") as f:
+        f.write(f"{name},{score}\n")
 
-def show_words_screen():
-    """Mostrar las palabras originales del juego en pantalla negra con letras blancas al final."""
-    words_window = tk.Tk()
-    words_window.title("Palabras del Juego")
-    words_window.geometry(f"{screen_width}x{screen_height}")
-    words_window.config(bg='black')  # Fondo negro
+def read_scores():
+    scores = []
+    if os.path.exists("score.txt"):
+        with open("score.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    n, s = line.strip().split(",")
+                    scores.append((n, int(s)))
+                except:
+                    pass
+    return scores
 
-    # Etiqueta que muestra las palabras en el centro de la pantalla
-    words_label = tk.Label(words_window, text="Palabras del juego:", font=("Helvetica", 36, "bold"), fg="white", bg="black")
-    words_label.pack(pady=50)
+def show_final_screen(played_words):
+    global player_name, score
+    save_score(player_name, score)
+    scores = read_scores()
+    scores = sorted(scores, key=lambda x: x[1], reverse=True)
+    
+    final_window = tk.Tk()
+    final_window.title("🏆 Resultado del Juego")
+    final_window.state("zoomed")
+    final_window.config(bg='black')
 
-    # Mostrar las palabras en la pantalla
-    words_text = "\n".join(original_words)  # Unir todas las palabras con saltos de línea
-    words_display = tk.Label(words_window, text=words_text, font=("Helvetica", 24), fg="white", bg="black")
-    words_display.pack(pady=20)
+    tk.Label(final_window, text="🎉 ¡Juego Finalizado! 🎉", font=("Comic Sans MS", 48, "bold"), fg="white", bg="black").pack(pady=20)
+    tk.Label(final_window, text="📜 Palabras del juego:", font=("Comic Sans MS", 36, "bold"), fg="white", bg="black").pack(pady=10)
+    tk.Label(final_window, text="\n".join(played_words), font=("Comic Sans MS", 28), fg="white", bg="black").pack(pady=10)
+    tk.Label(final_window, text="⭐ Historial de puntajes:", font=("Comic Sans MS", 36, "bold"), fg="white", bg="black").pack(pady=20)
 
-    # Botón para cerrar la ventana y salir del juego
-    close_button = tk.Button(words_window, text="Cerrar", font=("Helvetica", 20, "bold"), fg="white", bg="#39FF14", relief="raised", command=words_window.destroy)
-    close_button.pack(pady=50)
+    scores_text = "\n".join([f"{i+1}. {n}: {s}" for i, (n, s) in enumerate(scores[:10])])
+    tk.Label(final_window, text=scores_text, font=("Comic Sans MS", 28), fg="white", bg="black", justify="left").pack(pady=10)
+    tk.Label(final_window, text="👉 Presiona ENTER para salir", font=("Comic Sans MS", 28), fg="#FF4C29", bg="black").pack(pady=40)
 
-    # Ejecutar la ventana para mostrar las palabras
-    words_window.mainloop()
+    final_window.bind("<Return>", lambda e: (final_window.destroy(), sys.exit()))
+    final_window.mainloop()
 
 def show_welcome_screen():
-    """Mostrar la pantalla de bienvenida y tutorial del juego."""
-    def close_tutorial():
+    def start_tutorial(event=None):
+        global player_name
+        player_name = entry.get().strip()
+        if player_name == "":
+            messagebox.showwarning("Error", "Por favor ingresa un nombre válido.")
+            return
+        welcome_window.destroy()
+        show_tutorial()
+
+    welcome_window = tk.Tk()
+    welcome_window.title("🎮 ¡Adivina la Palabra Oculta!")
+    welcome_window.state("zoomed")
+
+    frame = tk.Frame(welcome_window, bg='#87CEEB', bd=5, relief='ridge')
+    frame.place(relx=0.5, rely=0.5, anchor='center')
+
+    tk.Label(frame, text="🔥 ¡Bienvenido al juego Adivina la Palabra Oculta! 🔥", font=("Comic Sans MS", 40, "bold"), fg="#1E3A8A", bg='#87CEEB').pack(pady=30, padx=50)
+    tk.Label(frame, text="👤 Ingresa tu nombre y presiona Enter:", font=("Comic Sans MS", 24), fg="#0B3D91", bg='#87CEEB').pack(pady=20)
+
+    entry = tk.Entry(frame, font=("Comic Sans MS", 24))
+    entry.pack(pady=10)
+    entry.focus_set()
+    entry.bind("<Return>", start_tutorial)
+
+    welcome_window.mainloop()
+
+def show_tutorial():
+    def start_game(event=None):
         tutorial_window.destroy()
-        main_game()  # Comienza el juego cuando se cierra el tutorial
+        main_game()
 
-    # Crear ventana de bienvenida
     tutorial_window = tk.Tk()
-    tutorial_window.title("Bienvenido al Juego")
-    tutorial_window.geometry(f"{screen_width}x{screen_height}")
-    tutorial_window.config(bg='black')
+    tutorial_window.title("📖 Tutorial")
+    tutorial_window.state("zoomed")
 
-    # Crear etiqueta de bienvenida
-    welcome_label = tk.Label(tutorial_window, text="¡Bienvenido al Mini Juego!", font=("Helvetica", 36, "bold"), fg="white", bg="black")
-    welcome_label.pack(pady=50)
-
-    # Crear instrucciones del juego
     instructions = (
-        "Instrucciones del juego:\n\n"
-        "1. Las palabras aparecerán como círculos con letras.\n"
-        "2. Usa tu dedo índice para tocar las letras de la palabra correcta.\n"
-        "3. Tienes 30 segundos por palabra.\n"
-        "4. Cada letra correcta te dará puntos. Evita tocar letras incorrectas.\n"
-        "5. Completa todas las palabras para ganar.\n"
+        "📖 Instrucciones del juego:\n\n"
+        "1️ Las palabras aparecerán como círculos con letras.\n"
+        "2️ Usa tu dedo índice para tocar las letras de la palabra correcta.\n"
+        "3️ Tienes 30 segundos por palabra.\n"
+        "4️ Presiona 'P' si necesitas una pista extra.\n"
+        "5️ Presiona 'S' para pasar a la siguiente palabra.\n"
+        "6️ Presiona 'ESC' para salir del juego.\n"
+        "7️ Completa todas las palabras para ganar 🏆.\n\n"
+        "👉 Presiona ENTER para empezar"
     )
-    instructions_label = tk.Label(tutorial_window, text=instructions, font=("Helvetica", 20), fg="white", bg="black")
-    instructions_label.pack(pady=20)
-
-    # Crear un botón verde neon para cerrar el tutorial
-    close_button = tk.Button(tutorial_window, text="Cerrar Tutorial", font=("Helvetica", 20, "bold"), fg="white", bg="#39FF14", relief="raised", command=close_tutorial)
-    close_button.pack(pady=50)
-
-    # Ejecutar la ventana de tutorial
+    tk.Label(tutorial_window, text=instructions, font=("Comic Sans MS", 26), justify="left").pack(pady=100, padx=50)
+    tutorial_window.bind("<Return>", start_game)
     tutorial_window.mainloop()
 
-# Función principal del juego
 def main_game():
-    global score, correct_words, incorrect_words
-    # Mientras haya palabras disponibles en la lista
+    global score, correct_words, incorrect_words, circles, player_name
+    played_words = []
+    words = random.sample(word_list, 4)
+
     while words:
-        start_time = time.time()  # Reiniciar el temporizador al comenzar con una nueva palabra
-        game_duration = 30  # Duración de 30 segundos por palabra
-
-        # Seleccionar una palabra aleatoria
-        selected_word = random.choice(words)
+        start_time = time.time()
+        game_duration = 30
+        selected_word = words.pop(0)
+        played_words.append(selected_word)
+        hint = word_hints.get(selected_word, "Sin pista disponible")
+        second_hint = extra_hints.get(selected_word, "No hay más pistas.")
+        use_second_hint = False
         generate_circles_for_word(selected_word)
-        words.remove(selected_word)  # Eliminar la palabra de la lista de palabras disponibles
-
-        word_completed = False  # Controlador para saber si la palabra fue completada correctamente
-        touched_letters = []  # Lista de letras tocadas por el jugador
+        touched_letters = []
+        forced_incorrect = False  # Flag para presionar 'S'
 
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
-
-            # Voltea la imagen para que actúe como un espejo
             frame = cv2.flip(frame, 1)
-
-            # Redimensiona el frame para que coincida con el tamaño de la pantalla
-            frame = cv2.resize(frame, (screen_width, screen_height))
-
-            # Convierte el marco de BGR a RGB
+            frame = cv2.resize(frame, (frame_width, frame_height))
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb_frame)
 
-            # Dibuja los círculos en la pantalla con las letras
-            for (cx, cy, letter) in circles:
-                cv2.circle(frame, (cx, cy), circle_radius, (255, 0, 0), -1)
-                cv2.putText(frame, letter.upper(), (cx - 10, cy + 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            current_hint = second_hint if use_second_hint else hint
+            frame = draw_text_with_border(frame, f"Pista: {current_hint}", (675, 20), font_size=36, text_color=(255,255,255))
 
-            # Si se detecta una mano
+            elapsed_time = time.time() - start_time
+            remaining_time = max(0, int(game_duration - elapsed_time))
+            frame = draw_text_with_border(frame, f"Tiempo restante: {remaining_time} seg", (760, 60), font_size=32, text_color=(255,255,255))
+
+            for i, (cx, cy, letter) in enumerate(circles):
+                cv2.circle(frame, (cx, cy), circle_radius, (255, 0, 0), -1)
+                cv2.putText(frame, letter.upper(), (cx-10, cy+10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
+
+            # Detección de mano
             if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
-                    # Obtén las coordenadas de la punta del dedo índice
                     index_finger = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
-                    index_x = int(index_finger.x * screen_width)
-                    index_y = int(index_finger.y * screen_height)
-
-                    # Dibuja la mano
+                    index_x = int(index_finger.x * frame_width)
+                    index_y = int(index_finger.y * frame_height)
                     mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-
-                    # Verifica si la punta del dedo índice toca algún círculo
                     for i, (cx, cy, letter) in enumerate(circles):
                         distance = ((index_x - cx) ** 2 + (index_y - cy) ** 2) ** 0.5
                         if distance < circle_radius and letter != '':
-                            # Si la letra tocada está en la palabra correcta
-                            if letter in selected_word:
-                                score += 5  # Sumar 5 puntos por cada letra correcta
-                                touched_letters.append(letter)  # Añadir la letra tocada a la lista
-                                circles[i] = (-150, -150, '')  # Eliminar la letra del círculo tocado
-                            else:
-                                score -= 2  # Restar 2 puntos por cada letra incorrecta
-                                circles[i] = (-150, -150, '')  # Eliminar la letra tocada
-                            break  # Sal de la búsqueda para evitar contar múltiples círculos
+                            touched_letters.append(letter)
+                            circles[i] = (-150, -150, '')
+                            break
 
-            # Verifica si todas las letras han sido tocadas
-            if all(letter == '' for _, _, letter in circles):
-                word_completed = True  # La palabra fue completada correctamente
-                cv2.putText(frame, "Palabra completada", (screen_width // 2 - 150, screen_height // 2), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                cv2.imshow("Mini Juego", frame)
-                cv2.waitKey(1000)  # Espera un segundo para mostrar el mensaje
-                break  # Salir del bucle y pasar a la siguiente palabra
+            # Mostrar score
+            frame = draw_text_with_border(frame, f"Puntuación: {score}", (10, 10), font_size=28, text_color=(0,0,255))
+            frame = draw_text_with_border(frame, f"Correctas: {correct_words}", (10, 50), font_size=28, text_color=(0,255,0))
+            frame = draw_text_with_border(frame, f"Erróneas: {incorrect_words}", (10, 90), font_size=28, text_color=(255,0,0))
 
-            # Verifica el tiempo del juego
-            elapsed_time = time.time() - start_time
-            if elapsed_time > game_duration:
-                break  # Terminar el juego si se acabó el tiempo
-
-            # Muestra el puntaje y los contadores en la pantalla
-            cv2.putText(frame, f"Score: {score}", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-            cv2.putText(frame, f"Correctas: {correct_words}", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.putText(frame, f"Erroneas: {incorrect_words}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
-            # Muestra el cuadro en la ventana de OpenCV
             cv2.imshow("Mini Juego", frame)
+            key = cv2.waitKey(10) & 0xFF
+            if key == 27:
+                words.clear()
+                break
+            elif key == ord('p'):
+                use_second_hint = True
+            elif key == ord('s'):
+                forced_incorrect = True  # Presionar 'S' marca palabra incorrecta
+                
 
-            # Presiona 'q' para salir
-            if cv2.waitKey(10) & 0xFF == ord('q'):
+            # Fin de palabra
+            if all(letter == '' for _, _, letter in circles) or remaining_time <= 0 or forced_incorrect:
+                formed_word = ''.join(touched_letters)
+                if forced_incorrect:
+                    incorrect_words += 1
+                    result_text = f"¡Palabra oculta incorrecta!"
+                    color_result = (0,0,255)
+                    score -= 7
+                elif formed_word == selected_word:
+                    correct_words += 1
+                    result_text = f"¡Palabra oculta correcta!"
+                    color_result = (0,255,0)
+                    score += 5 * len(selected_word)
+                else:
+                    incorrect_words += 1
+                    result_text = f"¡Palabra oculta incorrecta!"
+                    color_result = (0,0,255)
+                    score -= 7
+
+                ret, frame = cap.read()
+                frame = cv2.flip(frame, 1)
+                frame = cv2.resize(frame, (frame_width, frame_height))
+                frame = draw_text_with_border(frame, result_text, (frame_width//2 - 400, frame_height//2), font_size=40, text_color=color_result)
+                cv2.imshow("Mini Juego", frame)
+                cv2.waitKey(1500)
                 break
 
-        # Verifica si la palabra fue completada correctamente
-        if word_completed:
-            # Si las letras tocadas son iguales a la palabra seleccionada
-            if ''.join(touched_letters) == selected_word:
-                correct_words += 1
-            else:
-                incorrect_words += 1
-                score -= 7  # Restar 7 puntos por cada palabra errónea
-                cv2.putText(frame, "Palabra erronea", (screen_width // 2 - 150, screen_height // 2 + 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                cv2.imshow("Mini Juego", frame)
-                cv2.waitKey(1000)  # Espera un segundo para mostrar el mensaje
-        else:
-            incorrect_words += 1
-            score -= 7  # Restar 7 puntos por cada palabra errónea
-            cv2.putText(frame, "Palabra erronea", (screen_width // 2 - 150, screen_height // 2 - 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            cv2.imshow("Mini Juego", frame)
-            cv2.waitKey(1000)  # Espera un segundo para mostrar el mensaje
-
-        # Si ya no hay palabras en la lista, termina el juego
-        if not words:
-            break
-
-    # Cuando no haya más palabras en la lista, termina el juego
-    show_final_score()
-    show_words_screen()  # Mostrar las palabras después de terminar el juego
     cap.release()
     cv2.destroyAllWindows()
+    show_final_screen(played_words)
 
 if __name__ == "__main__":
     show_welcome_screen()
+
